@@ -49,9 +49,9 @@ class BaseRagasLLM(ABC):
     def set_run_config(self, run_config: RunConfig):
         self.run_config = run_config
 
-    def get_temperature(self, n: int) -> float:
+    def get_temperature(self, n: int, temperature: float) -> float:
         """Return the temperature to use for completion based on n."""
-        return 0.3 if n > 1 else 1e-8
+        return 0.3 if n > 1 else temperature
 
     @abstractmethod
     def generate_text(
@@ -134,7 +134,9 @@ class LangchainLLMWrapper(BaseRagasLLM):
         stop: t.Optional[t.List[str]] = None,
         callbacks: Callbacks = None,
     ) -> LLMResult:
-        temperature = self.get_temperature(n=n)
+        if self.check_langchain_temperature():
+            temperature = self.langchain_llm.temperature
+        temperature = self.get_temperature(n=n, temperature=temperature)
         if is_multiple_completion_supported(self.langchain_llm):
             return self.langchain_llm.generate_prompt(
                 prompts=[prompt],
@@ -164,7 +166,9 @@ class LangchainLLMWrapper(BaseRagasLLM):
         stop: t.Optional[t.List[str]] = None,
         callbacks: Callbacks = None,
     ) -> LLMResult:
-        temperature = self.get_temperature(n=n)
+        if self.check_langchain_temperature():
+            temperature = self.langchain_llm.temperature
+        temperature = self.get_temperature(n=n, temperature=temperature)
         if is_multiple_completion_supported(self.langchain_llm):
             return await self.langchain_llm.agenerate_prompt(
                 prompts=[prompt],
@@ -201,6 +205,11 @@ class LangchainLLMWrapper(BaseRagasLLM):
                 )
             self.langchain_llm.request_timeout = run_config.timeout
             self.run_config.exception_types = RateLimitError
+    
+    @classmethod
+    def check_langchain_temperature(cls):
+        return hasattr(cls.langchain_llm, "temperature") \
+            and isinstance(cls.langchain_llm.temperature, float)
 
 
 def llm_factory(
