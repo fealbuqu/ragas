@@ -211,10 +211,9 @@ class LangchainLLMWrapper(BaseRagasLLM):
             self.langchain_llm.request_timeout = run_config.timeout
             self.run_config.exception_types = RateLimitError
     
-    @classmethod
-    def check_langchain_temperature(cls):
-        return hasattr(cls.langchain_llm, "temperature") \
-            and isinstance(cls.langchain_llm.temperature, float)
+    def check_langchain_temperature(self):
+        return hasattr(self.langchain_llm, "temperature") \
+            and isinstance(self.langchain_llm.temperature, float)
 
 
 class LlamaIndexLLMWrapper(BaseRagasLLM):
