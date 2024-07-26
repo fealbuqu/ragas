@@ -233,9 +233,7 @@ class Faithfulness(MetricWithLLM):
 
         return score
 
-    async def _ascore(
-        self: t.Self, row: t.Dict, callbacks: Callbacks, is_async: bool
-    ) -> float:
+    async def _ascore(self: t.Self, row: t.Dict, callbacks: Callbacks) -> float:
         """
         returns the NLI score for each (q, c, a) pair
         """
@@ -245,7 +243,6 @@ class Faithfulness(MetricWithLLM):
         statements = await self.llm.generate(
             p_value,
             callbacks=callbacks,
-            is_async=is_async,
         )
         statements = await _statements_output_parser.aparse(
             statements.generations[0][0].text, p_value, self.llm, self.max_retries
@@ -263,7 +260,6 @@ class Faithfulness(MetricWithLLM):
         nli_result = await self.llm.generate(
             p_value,
             callbacks=callbacks,
-            is_async=is_async,
             n=self._reproducibility,
         )
 
