@@ -1,5 +1,9 @@
 from __future__ import annotations
 
+import typing as t
+
+import pytest
+
 
 def test_debug_tracking_flag():
     import os
@@ -125,3 +129,32 @@ def test_testset_generation_tracking(monkeypatch):
         monkeypatch.setattr(analyticsmodule, "do_not_track", lambda: False)
         monkeypatch.setattr(analyticsmodule, "_usage_event_debugging", lambda: False)
         track(testset_event_payload)
+
+
+def test_was_completed(monkeypatch):
+    from ragas._analytics import IsCompleteEvent, track_was_completed
+
+    event_properties_list: t.List[IsCompleteEvent] = []
+
+    def echo_track(event_properties):
+        event_properties_list.append(event_properties)
+
+    monkeypatch.setattr("ragas._analytics.track", echo_track)
+
+    @track_was_completed
+    def test(raise_error=True):
+        if raise_error:
+            raise ValueError("test")
+        else:
+            pass
+
+    with pytest.raises(ValueError):
+        test(raise_error=True)
+
+    assert event_properties_list[-1].event_type == "test"
+    assert event_properties_list[-1].is_completed is False
+
+    test(raise_error=False)
+
+    assert event_properties_list[-1].event_type == "test"
+    assert event_properties_list[-1].is_completed is True

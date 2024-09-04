@@ -17,11 +17,9 @@ if t.TYPE_CHECKING:
 
     from ragas.llms.prompt import PromptValue
 
-from typing import Any, Protocol
 
-
-class HasSegmentMethod(Protocol):
-    def segment(self, text) -> Any:
+class HasSegmentMethod(t.Protocol):
+    def segment(self, text) -> t.Any:
         ...
 
 
@@ -211,11 +209,14 @@ class Faithfulness(MetricWithLLM):
     def _create_statements_prompt(self, row: t.Dict) -> PromptValue:
         assert self.sentence_segmenter is not None, "sentence_segmenter is not set"
 
-        text, question = row["answer"], row["question"]
-        sentences = self.sentence_segmenter.segment(text)
+        answer, question = row["answer"], row["question"]
+        sentences = self.sentence_segmenter.segment(answer)
+        sentences = [
+            sentence for sentence in sentences if sentence.strip().endswith(".")
+        ]
         sentences = "\n".join([f"{i}:{x}" for i, x in enumerate(sentences)])
         prompt_value = self.statement_prompt.format(
-            question=question, answer=text, sentences=sentences
+            question=question, answer=answer, sentences=sentences
         )
         return prompt_value
 
@@ -303,8 +304,80 @@ class Faithfulness(MetricWithLLM):
             language, self.llm, cache_dir
         )
 
+        self.sentence_segmenter = get_segmenter(language=language, clean=False)
+
     def save(self, cache_dir: t.Optional[str] = None) -> None:
         self.nli_statements_message.save(cache_dir)
+        self.statement_prompt.save(cache_dir)
+
+
+@dataclass
+class FaithulnesswithHHEM(Faithfulness):
+    name: str = "faithfulness_with_hhem"  # type: ignore
+    device: str = "cpu"
+    batch_size: int = 10
+
+    def __post_init__(self):
+        try:
+            from transformers import AutoModelForSequenceClassification
+        except ImportError:
+            raise ImportError(
+                "Huggingface transformers must be installed to use this feature, try `pip install transformers`"
+            )
+        self.nli_classifier = AutoModelForSequenceClassification.from_pretrained(
+            "vectara/hallucination_evaluation_model", trust_remote_code=True
+        )
+        self.nli_classifier.to(self.device)
+        super().__post_init__()
+
+    def _create_pairs(
+        self, row: t.Dict, statements: t.List[str]
+    ) -> t.List[t.Tuple[str, str]]:
+        """
+        create pairs of (question, answer) from the row
+        """
+        premise = "\n".join(row["contexts"])
+        pairs = [(premise, statement) for statement in statements]
+        return pairs
+
+    def _create_batch(
+        self, pairs: t.List[t.Tuple[str, str]]
+    ) -> t.Generator[t.List[t.Tuple[str, str]], None, None]:
+        length_of_pairs = len(pairs)
+        for ndx in range(0, length_of_pairs, self.batch_size):
+            yield pairs[ndx : min(ndx + self.batch_size, length_of_pairs)]
+
+    async def _ascore(self: t.Self, row: t.Dict, callbacks: Callbacks) -> float:
+        """
+        returns the NLI score for each (q, c, a) pair
+        """
+        assert self.llm is not None, "LLM is not set"
+
+        p_value = self._create_statements_prompt(row)
+        statements = await self.llm.generate(
+            p_value,
+            callbacks=callbacks,
+        )
+        statements = await _statements_output_parser.aparse(
+            statements.generations[0][0].text, p_value, self.llm, self.max_retries
+        )
+
+        if statements is None:
+            return np.nan
+
+        statements = [item["simpler_statements"] for item in statements.dicts()]
+        statements = [item for sublist in statements for item in sublist]
+
+        assert isinstance(statements, t.List), "statements must be a list"
+
+        scores = []
+        pairs = self._create_pairs(row, statements)
+        for input_pairs in self._create_batch(pairs):  # to avoid OOM
+            batch_scores = (
+                self.nli_classifier.predict(input_pairs).cpu().detach().round()
+            )
+            scores += batch_scores
+        return sum(scores) / len(scores)
 
 
 faithfulness = Faithfulness()

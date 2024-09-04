@@ -100,7 +100,6 @@ conditional_question_prompt = Prompt(
     language="english",
 )
 
-
 compress_question_prompt = Prompt(
     name="compress_question",
     instruction="""Rewrite the following question to make it more indirect and shorter while retaining the essence of the original question.
@@ -121,7 +120,6 @@ compress_question_prompt = Prompt(
     output_type="str",
     language="english",
 )
-
 
 conversational_question_prompt = Prompt(
     name="conversation_question",
@@ -145,7 +143,6 @@ conversational_question_prompt = Prompt(
     output_type="json",
     language="english",
 )
-
 
 question_answer_prompt = Prompt(
     name="answer_formulate",
@@ -221,7 +218,6 @@ keyphrase_extraction_prompt = Prompt(
     output_type="json",
 )
 
-
 seed_question_prompt = Prompt(
     name="seed_question",
     instruction="Generate a question that can be fully answered from given context. The question should be formed using topic.\nMAKE SURE TO ONLY WRITE THE QUESTION ITSELF! Do not mention context or any explanation of any kind",
@@ -246,6 +242,7 @@ seed_question_prompt = Prompt(
     output_key="question",
     output_type="str",
 )
+
 
 main_topic_extraction_prompt = Prompt(
     name="main_topic_extraction",
@@ -502,3 +499,20 @@ evolution_elimination_prompt = Prompt(
     output_type="json",
     language="english",
 )
+
+testset_prompts = [
+    reasoning_question_prompt,
+    multi_context_question_prompt,
+    conditional_question_prompt,
+    compress_question_prompt,
+    conversational_question_prompt,
+    question_answer_prompt,
+    keyphrase_extraction_prompt,
+    seed_question_prompt,
+    main_topic_extraction_prompt,
+    find_relevant_context_prompt,
+    question_rewrite_prompt,
+    context_scoring_prompt,
+    filter_question_prompt,
+    evolution_elimination_prompt,
+]

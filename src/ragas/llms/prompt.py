@@ -158,6 +158,10 @@ class Prompt(BaseModel):
             raise ValueError(
                 f"Input variables {self.input_keys} do not match with the given parameters {list(kwargs.keys())}"
             )
+        for key, value in kwargs.items():
+            if isinstance(value, str):
+                kwargs[key] = json.dumps(value)
+
         prompt = self.to_string()
         return PromptValue(prompt_str=prompt.format(**kwargs))
 
@@ -178,7 +182,12 @@ class Prompt(BaseModel):
         # TODO: Add callbacks
         cache_dir = cache_dir if cache_dir else get_cache_dir()
         if os.path.exists(os.path.join(cache_dir, language, f"{self.name}.json")):
-            return self._load(language, self.name, cache_dir)
+            self_cp = self._load(language, self.name, cache_dir)
+
+            self.language = self_cp.language
+            self.examples = self_cp.examples
+
+            return self_cp
 
         logger.info("Adapting %s to %s", self.name, language)
         prompts = []
@@ -256,9 +265,11 @@ class Prompt(BaseModel):
 
         # TODO:Validate the prompt after adaptation
 
+        self.save(cache_dir=cache_dir)
+
         return self
 
-    def save(self, cache_dir: t.Optional[str] = None) -> None:
+    def save(self, cache_dir: t.Optional[str] = None):
         cache_dir = cache_dir if cache_dir else get_cache_dir()
         cache_dir = os.path.join(cache_dir, self.language)
         if not os.path.exists(cache_dir):

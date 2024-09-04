@@ -4,7 +4,7 @@ import asyncio
 import logging
 import typing as t
 from abc import ABC, abstractmethod
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from functools import partial
 
 from langchain_community.chat_models.vertexai import ChatVertexAI
@@ -15,6 +15,7 @@ from langchain_openai.chat_models import AzureChatOpenAI, ChatOpenAI
 from langchain_openai.llms import AzureOpenAI, OpenAI
 from langchain_openai.llms.base import BaseOpenAI
 
+from ragas.integrations.helicone import helicone_config
 from ragas.run_config import RunConfig, add_async_retry, add_retry
 
 if t.TYPE_CHECKING:
@@ -45,7 +46,7 @@ def is_multiple_completion_supported(llm: BaseLanguageModel) -> bool:
 
 @dataclass
 class BaseRagasLLM(ABC):
-    run_config: RunConfig
+    run_config: RunConfig = field(default_factory=RunConfig)
 
     def set_run_config(self, run_config: RunConfig):
         self.run_config = run_config
@@ -70,7 +71,7 @@ class BaseRagasLLM(ABC):
         self,
         prompt: PromptValue,
         n: int = 1,
-        temperature: float = 1e-8,
+        temperature: t.Optional[float] = None,
         stop: t.Optional[t.List[str]] = None,
         callbacks: Callbacks = None,
     ) -> LLMResult:
@@ -86,6 +87,10 @@ class BaseRagasLLM(ABC):
         is_async: bool = True,
     ) -> LLMResult:
         """Generate text using the given event loop."""
+
+        if temperature is None:
+            temperature = 1e-8
+
         if is_async:
             agenerate_text_with_retry = add_async_retry(
                 self.agenerate_text, self.run_config
@@ -278,10 +283,13 @@ class LlamaIndexLLMWrapper(BaseRagasLLM):
         self,
         prompt: PromptValue,
         n: int = 1,
-        temperature: float = 1e-8,
+        temperature: t.Optional[float] = None,
         stop: t.Optional[t.List[str]] = None,
         callbacks: Callbacks = None,
     ) -> LLMResult:
+        if temperature is None:
+            temperature = 1e-8
+
         kwargs = self.check_args(n, temperature, stop, callbacks)
         li_response = await self.llm.acomplete(prompt.to_string(), **kwargs)
 
@@ -289,10 +297,21 @@ class LlamaIndexLLMWrapper(BaseRagasLLM):
 
 
 def llm_factory(
-    model: str = "gpt-3.5-turbo", run_config: t.Optional[RunConfig] = None
+    model: str = "gpt-4o-mini",
+    run_config: t.Optional[RunConfig] = None,
+    default_headers: t.Optional[t.Dict[str, str]] = None,
+    base_url: t.Optional[str] = None,
 ) -> BaseRagasLLM:
     timeout = None
     if run_config is not None:
         timeout = run_config.timeout
-    openai_model = ChatOpenAI(model=model, timeout=timeout)
+
+    # if helicone is enabled, use the helicone
+    if helicone_config.is_enabled:
+        default_headers = helicone_config.default_headers()
+        base_url = helicone_config.base_url
+
+    openai_model = ChatOpenAI(
+        model=model, timeout=timeout, default_headers=default_headers, base_url=base_url
+    )
     return LangchainLLMWrapper(openai_model, run_config)

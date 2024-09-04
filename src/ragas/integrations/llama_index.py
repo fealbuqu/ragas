@@ -12,8 +12,8 @@ from ragas.evaluation import evaluate as ragas_evaluate
 from ragas.exceptions import ExceptionInRunner
 from ragas.executor import Executor
 from ragas.llms import LlamaIndexLLMWrapper
-from ragas.validation import EVALMODE_TO_COLUMNS, validate_evaluation_modes
 from ragas.run_config import RunConfig
+from ragas.validation import EVALMODE_TO_COLUMNS, validate_evaluation_modes
 
 if t.TYPE_CHECKING:
     from llama_index.core.base.embeddings.base import (
@@ -43,11 +43,11 @@ def validate_dataset(dataset: dict, metrics: list[Metric]):
 
 def evaluate(
     query_engine,
-    dataset: dict,
+    dataset: Dataset,
     metrics: list[Metric],
     llm: t.Optional[LlamaindexLLM] = None,
     embeddings: t.Optional[LlamaIndexEmbeddings] = None,
-    raise_exceptions: bool = True,
+    raise_exceptions: bool = False,
     column_map: t.Optional[t.Dict[str, str]] = None,
     run_config: t.Optional[RunConfig] = None,
 ) -> Result:
@@ -98,7 +98,7 @@ def evaluate(
             "answer": answers,
         }
     )
-    if "ground_truth" in dataset:
+    if "ground_truth" in dataset.column_names:
         hf_dataset = hf_dataset.add_column(
             name="ground_truth",
             column=dataset["ground_truth"],
