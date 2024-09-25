@@ -38,13 +38,13 @@ logger = logging.getLogger(__name__)
 @dataclass
 class NoiseSensitivity(MetricWithLLM, SingleTurnMetric):
     name: str = "noise_sensitivity"  # type: ignore
-    focus: str = "relevant"
+    focus: t.Literal["relevant", "irrelevant"] = "relevant"
     _required_columns: t.Dict[MetricType, t.Set[str]] = field(
         default_factory=lambda: {
             MetricType.SINGLE_TURN: {
                 "user_input",
                 "response",
-                "ground_truth",
+                "reference",
                 "retrieved_contexts",
             }
         }
@@ -257,7 +257,7 @@ class NoiseSensitivity(MetricWithLLM, SingleTurnMetric):
         answers["retrieved2ground_truth"] = np.array(gt_verdictslist).T
         answers["retrieved2answer"] = np.array(ans_verdictslist).T
         answers["ground_truth2answer"] = await self._evaluate_statement_faithfulness(
-            ans_statements, row["ground_truth"], callbacks
+            ans_statements, row["reference"], callbacks
         )
         answers["ground_truth2answer"] = np.array([answers["ground_truth2answer"]])
         answers = {k: v.astype(bool) for k, v in answers.items()}
@@ -265,8 +265,6 @@ class NoiseSensitivity(MetricWithLLM, SingleTurnMetric):
 
     def adapt(self, language: str, cache_dir: t.Optional[str] = None) -> None:
         assert self.llm is not None, "LLM is not set"
-
-        logger.info(f"Adapting Faithfulness metric to {language}")
 
         self.nli_statements_message = self.nli_statements_message.adapt(
             language, self.llm, cache_dir
@@ -280,7 +278,3 @@ class NoiseSensitivity(MetricWithLLM, SingleTurnMetric):
     def save(self, cache_dir: t.Optional[str] = None) -> None:
         self.nli_statements_message.save(cache_dir)
         self.statement_prompt.save(cache_dir)
-
-
-noise_sensitivity_relevant = NoiseSensitivity()
-noise_sensitivity_irrelevant = NoiseSensitivity(focus="irrelevant")
